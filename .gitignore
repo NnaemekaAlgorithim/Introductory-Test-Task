@@ -1,0 +1,6 @@
+test_env/
+.env
+*/__pycache__
+*/server.log
+*/server
+/.vscode
