@@ -4,3 +4,15 @@ test_env/
 */server.log
 */server
 /.vscode
+*/.pytest_cache
+*/test_py_server/__pycache__
+__pycache__
+.pytest_cache
+personal_note.txt
+performance_summary.csv
+Report.py
+performance_log.txt
+.~lock.performance_summary.csv#
+server.crt
+server.key
+ca_certificate.pem

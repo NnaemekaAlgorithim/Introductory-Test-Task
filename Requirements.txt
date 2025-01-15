@@ -1,1 +1,7 @@
 python-dotenv
+pytest
+pdoc
+flake8
+mypy
+pytest-mock
+python-daemon
