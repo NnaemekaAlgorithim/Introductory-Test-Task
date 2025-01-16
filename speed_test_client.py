@@ -3,20 +3,32 @@ import ssl
 import time
 import tracemalloc
 from typing import Tuple
+import os
+from dotenv import load_dotenv
+
+
+# Load environment variables from the .env file
+load_dotenv()
 
 # Server configuration
-HOST: str = "0.0.0.0"  # Server IP address
-PORT: int = 44445      # Server port
-BUFFER_SIZE: int = 1024  # Size of the buffer for receiving data
-CA_CERT_FILE: str = "ca_certificate.pem"  # Path to the CA certificate file
+HOST: str = os.getenv("HOST", "0.0.0.0")
+PORT: int = int(os.getenv("PORT", 44445))
+BUFFER_SIZE: int = int(os.getenv("BUFFER_SIZE", 1024))
+CA_CERT_FILE: str = os.getenv("CA_CERT_FILE")
+
 
 # Toggle SSL on or off
-USE_SSL: bool = False
+USE_SSL: bool = os.getenv("USE_SSL", "False").lower() == "true"
 
 
-def measure_response_time_and_memory(host: str, port: int, message: str) -> Tuple[str, float, float]:
+def measure_response_time_and_memory(
+            host: str,
+            port: int,
+            message: str
+        ) -> Tuple[str, float, float]:
     """
-    Sends a message to the server (optionally over SSL) and measures response time and memory usage.
+    Sends a message to the server (optionally over SSL) and
+    measures response time and memory usage.
 
     Args:
         host (str): Server's IP address.
@@ -24,7 +36,8 @@ def measure_response_time_and_memory(host: str, port: int, message: str) -> Tupl
         message (str): Message to send to the server.
 
     Returns:
-        Tuple[str, float, float]: Server's response, time taken in seconds, and peak memory usage in MB.
+        Tuple[str, float, float]: Server's response,
+        time taken in seconds, and peak memory usage in MB.
     """
     tracemalloc.start()  # Start tracking memory usage
 
@@ -33,13 +46,18 @@ def measure_response_time_and_memory(host: str, port: int, message: str) -> Tupl
 
     if USE_SSL:
         # Wrap the socket with SSL if enabled
-        context = ssl.create_default_context(cafile=CA_CERT_FILE) 
-        client_socket = context.wrap_socket(raw_socket, server_hostname=host)
+        context = ssl.create_default_context(cafile=CA_CERT_FILE)
+        client_socket = context.wrap_socket(
+            raw_socket,
+            server_hostname=host
+        )
         print(f"SSL is enabled. Using SSL to connect to {host}:{port}")
     else:
         # Use plain socket if SSL is disabled
         client_socket = raw_socket
-        print(f"SSL is disabled. Using plain socket to connect to {host}:{port}")
+        print(
+            f"SSL is disabled. Using plain socket to connect to {host}:{port}"
+        )
 
     with client_socket:
         try:
@@ -71,14 +89,20 @@ def measure_response_time_and_memory(host: str, port: int, message: str) -> Tupl
 
         except (socket.error, Exception) as error:
             tracemalloc.stop()  # Stop memory tracking in case of error
-            raise RuntimeError(f"An error occurred while communicating with the server: {error}")
+            raise RuntimeError(
+                f"An error occurred while"
+                f"communicating with the server: {error}"
+            )
 
 
 def main() -> None:
     """
     Main function to handle user input and execute the client workflow.
     """
-    print(f"{'SSL' if USE_SSL else 'Plain'} Client for measuring server response times and memory usage.")
+    print(
+        f"{'SSL' if USE_SSL else 'Plain'}"
+        f"Client for measuring server response times and memory usage."
+    )
     message: str = input("Enter the message to send to the server: ")
 
     # Check if the message is empty
@@ -87,7 +111,13 @@ def main() -> None:
         return
 
     try:
-        response, elapsed_time, memory_usage = measure_response_time_and_memory(HOST, PORT, message)
+        response, elapsed_time, memory_usage = (
+            measure_response_time_and_memory(
+                HOST,
+                PORT,
+                message
+            )
+        )
 
         # Display server's response, elapsed time, and memory usage
         print(f"Received: {response}")

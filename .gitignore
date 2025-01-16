@@ -16,3 +16,5 @@ performance_log.txt
 server.crt
 server.key
 ca_certificate.pem
+os
+pytest

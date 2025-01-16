@@ -1,7 +1,8 @@
 """
 User-friendly client script to send messages to a server.
 
-This script allows users to send a message to a server and receive its response.
+This script allows users to send a message to a server and
+receive its response.
 Designed for simplicity and ease of use, this client abstracts performance
 measurement details to focus solely on communication.
 """
@@ -11,12 +12,16 @@ from typing import Optional
 
 
 # Server configuration
-HOST: str = "0.0.0.0"  # Server IP address
-PORT: int = 44445       # Server port
-BUFFER_SIZE: int = 1024  # Size of the buffer for receiving data
+HOST: str = "0.0.0.0"
+PORT: int = 44445
+BUFFER_SIZE: int = 1024
 
 
-def send_message_to_server(host: str, port: int, message: str) -> Optional[str]:
+def send_message_to_server(
+        host: str,
+        port: int,
+        message: str
+        ) -> Optional[str]:
     """
     Sends a message to the server and receives its response.
 
@@ -26,9 +31,13 @@ def send_message_to_server(host: str, port: int, message: str) -> Optional[str]:
         message (str): Message to send to the server.
 
     Returns:
-        Optional[str]: Server's response, or None if an error occurred.
+        Optional[str]: Server's response,
+                       or None if an error occurred.
     """
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client_socket:
+    with socket.socket(
+        socket.AF_INET,
+        socket.SOCK_STREAM
+    ) as client_socket:
         try:
             # Connect to the server
             client_socket.connect((host, port))
@@ -39,7 +48,9 @@ def send_message_to_server(host: str, port: int, message: str) -> Optional[str]:
             print(f"Sent: {message}")
 
             # Receive and return the server's response
-            response: str = client_socket.recv(BUFFER_SIZE).decode("utf-8")
+            response: str = client_socket.recv(BUFFER_SIZE).decode(
+                "utf-8"
+            )
             return response.strip()
 
         except (socket.error, Exception) as error:
@@ -53,7 +64,7 @@ def main() -> None:
     """
     print("Welcome to the Client Application!")
     print("Send a message to the server and receive a response.")
-    
+
     message: str = input("Enter the message to send to the server: ")
 
     # Check if the message is empty

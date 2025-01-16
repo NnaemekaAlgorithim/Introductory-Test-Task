@@ -1,96 +1,107 @@
-# import pytest
-# from unittest import mock
-# import os
-# import time
+import pytest
+from unittest.mock import patch
+from py_server.file_utils import linux_grep_search, load_file_into_cache
 
-# from py_server.file_utils import load_file_into_cache, search_in_file
 
-# @pytest.fixture
-# def mock_file_content():
-#     """Mock content of the file."""
-#     return "This is a sample line in the file.\nAnother line."
+# Function to test linux_grep_search
+@pytest.mark.parametrize(
+    "file_path, search_string, reread_on_query, cached_lines, expected_result",
+    [
+        ("test.txt", "search_term", True, None, True),
+        ("test.txt", "search_term", False, ["line1", "search_term"], True),
+        ("test.txt", "search_term", False, None, False),
+        ("nonexistent.txt", "search_term", True, None, False),
+        ("test.txt", "search_term", True, None, True),
+    ]
+)
+@patch("subprocess.run")
+def test_linux_grep_search(
+    mock_run,
+    file_path,
+    search_string,
+    reread_on_query,
+    cached_lines,
+    expected_result
+):
+    """
+    Test the `linux_grep_search` function for various scenarios.
+    """
+    # Mock subprocess.run to simulate command behavior
+    if reread_on_query and file_path != "nonexistent.txt":
+        mock_run.return_value.returncode = 0  # Simulating grep success
+    else:
+        mock_run.return_value.returncode = 1  # Simulating grep failure
 
-# @pytest.fixture
-# def mock_file_path(mock_file_content):
-#     """Create a mock file for testing."""
-#     file_path = "test_file.txt"
-#     with open(file_path, "w") as file:
-#         file.write(mock_file_content)
-#     yield file_path
-#     os.remove(file_path)  # Clean up after test
+    result = linux_grep_search(
+        file_path,
+        search_string,
+        reread_on_query,
+        cached_lines
+    )
 
-# def test_search_in_file_found(mock_file_path):
-#     """Test for valid search where the string is found in the file."""
-#     result = search_in_file(mock_file_path, "This is a sample line in the file.", False)
-#     assert result is True
+    assert result == expected_result
 
-# def test_search_in_file_not_found(mock_file_path):
-#     """Test for valid search where the string is not found in the file."""
-#     result = search_in_file(mock_file_path, "Non-existing string", False)
-#     assert result is False
 
-# def test_search_in_file_with_cache():
-#     """Test for valid search when cached lines are used."""
-#     cached_lines = ["Line 1", "Line 2", "Search this line"]
-#     result = search_in_file("dummy_path.txt", "Search this line", False, cached_lines)
-#     assert result is True
+@pytest.mark.parametrize(
+    "file_path, expected_result",
+    [
+        ("test.txt", []),  # File with valid content
+        ("nonexistent.txt", []),  # File does not exist
+        ("empty.txt", []),  # Empty file
+    ]
+)
+@patch("builtins.open")
+def test_load_file_into_cache(mock_open, file_path, expected_result):
+    """
+    Test the `load_file_into_cache` function for various scenarios.
+    """
+    # Mocking open function behavior
+    if file_path == "test.txt":
+        # Mock the file contents for a valid file
+        mock_file = mock_open.return_value
+        mock_enter = mock_file.__enter__.return_value
+        mock_enter.readlines.return_value = ["line1\n", "line2\n"]
+    elif file_path == "empty.txt":
+        # Mock an empty file
+        mock_file = mock_open.return_value
+        mock_enter = mock_file.__enter__.return_value
+        mock_enter.readlines.return_value = []
+    else:
+        # Simulate file not found error
+        mock_open.side_effect = FileNotFoundError
 
-# def test_search_in_file_file_not_found():
-#     """Test for search when the file is not found."""
-#     with mock.patch("builtins.open", mock.MagicMock(side_effect=FileNotFoundError)):
-#         result = search_in_file("non_existent_file.txt", "Any search string", True)
-#         assert result is None
+    result = load_file_into_cache(file_path)
 
-# def test_search_in_file_general_error():
-#     """Test for general error when accessing file."""
-#     with mock.patch("builtins.open", mock.MagicMock(side_effect=PermissionError)):
-#         result = search_in_file("test_file.txt", "Any search string", True)
-#         assert result is None
+    # Assert that the result matches the expected result
+    assert result == expected_result
 
-# def test_load_file_into_cache(mock_file_path):
-#     """Test loading the file into memory as a cache."""
-#     result = load_file_into_cache(mock_file_path)
-#     assert result == ["This is a sample line in the file.", "Another line."]
 
-# def test_load_file_into_cache_file_not_found():
-#     """Test for file not found error while loading into cache."""
-#     result = load_file_into_cache("non_existent_file.txt")
-#     assert result == []
+# Edge case: handle invalid arguments and logging errors
 
-# def test_load_file_into_cache_general_error():
-#     """Test for general error when loading file into cache."""
-#     with mock.patch("builtins.open", mock.MagicMock(side_effect=PermissionError)):
-#         result = load_file_into_cache("test_file.txt")
-#         assert result == []
+@pytest.mark.parametrize(
+    "file_path, search_string, reread_on_query, cached_lines, expected_result",
+    [
+        (None, "search_term", True, None, None),
+        ("test.txt", None, True, None, None),
+        ("test.txt", "search_term", None, False, None),
+    ]
+)
+def test_linux_grep_search_edge_cases(
+    file_path,
+    search_string,
+    reread_on_query,
+    cached_lines,
+    expected_result
+):
+    """
+    Test edge cases for `linux_grep_search`
+    when provided with invalid arguments.
+    """
+    result = linux_grep_search(
+        file_path,
+        search_string,
+        reread_on_query,
+        cached_lines
+    )
 
-# def test_load_file_into_cache_empty_file():
-#     """Test for loading an empty file into cache."""
-#     empty_file_path = "empty_file.txt"
-#     with open(empty_file_path, "w") as f:
-#         f.write("")
-    
-#     result = load_file_into_cache(empty_file_path)
-#     assert result == []
-    
-#     os.remove(empty_file_path)  # Clean up
-
-# def test_search_in_large_file():
-#     """Test performance of searching in large file."""
-#     large_file_path = "large_file.txt"
-#     with open(large_file_path, "w") as f:
-#         f.write("A" * 10**6)  # Create a large file with 1 million characters
-
-#     start_time = time.time()
-#     result = search_in_file(large_file_path, "A" * 100, False)
-#     elapsed_time = time.time() - start_time
-#     print(f"Time to search in large file: {elapsed_time:.2f} seconds")
-#     assert elapsed_time < 2  # Example threshold for performance
-
-#     os.remove(large_file_path)  # Clean up
-
-# def test_search_in_file_file_not_found(caplog):
-#     """Test file not found error and capture log."""
-#     with mock.patch("builtins.open", mock.MagicMock(side_effect=FileNotFoundError)):
-#         result = search_in_file("non_existent_file.txt", "Any search string", True)
-#         assert result is None
-#         assert "File not found" in caplog.text
+    assert result == expected_result

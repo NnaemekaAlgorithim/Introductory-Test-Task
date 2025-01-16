@@ -5,19 +5,29 @@ import threading
 import sys
 from typing import List, Tuple
 import daemon
-from py_server.config import HOST, PORT, FILE_PATH, REREAD_ON_QUERY
-from py_server.config import SSL_CERTIFICATE, MAX_BUFFER_SIZE
-from py_server.config import SSL_KEY, ENABLE_SSL
+
+from py_server.config import (
+    HOST,
+    PORT,
+    FILE_PATH,
+    REREAD_ON_QUERY,
+    SSL_CERTIFICATE,
+    SSL_KEY,
+    ENABLE_SSL,
+    LOG_FILE,
+)
 from py_server.file_utils import load_file_into_cache
 from py_server.client_handler import handle_client
 
 
 def get_file_path_and_reread_option() -> Tuple[str, bool]:
     """
-    Retrieve the file path and the REREAD_ON_QUERY option from the configuration.
+    Retrieve the file path and the REREAD_ON_QUERY option
+    from the configuration.
 
     Returns:
-        Tuple[str, bool]: File path as a string and reread option as a boolean.
+        Tuple[str, bool]: File path as a string and reread
+        option as a boolean.
     """
     file_path: str = FILE_PATH
     reread_on_query: bool = REREAD_ON_QUERY
@@ -33,7 +43,7 @@ def create_ssl_context() -> ssl.SSLContext:
     """
     ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     ssl_context.load_cert_chain(certfile=SSL_CERTIFICATE, keyfile=SSL_KEY)
-    ssl_context.options |= ssl.OP_NO_TLSv1 | ssl.OP_NO_TLSv1_1  # Disable weak protocols
+    ssl_context.options |= ssl.OP_NO_TLSv1 | ssl.OP_NO_TLSv1_1
     return ssl_context
 
 
@@ -41,8 +51,8 @@ def start_server() -> None:
     """
     Start the server to handle multiple client connections.
 
-    This function initializes the server socket, retrieves the file path
-    and reread option, and handles incoming client connections in separate threads.
+    Initializes the server socket, retrieves the file path and reread option,
+    and handles incoming client connections in separate threads.
     """
     file_path, reread_on_query = get_file_path_and_reread_option()
 
@@ -61,9 +71,9 @@ def start_server() -> None:
         server_socket.listen()
         logging.info(f"Server started on {HOST}:{PORT}")
 
+        ssl_context = None
         if ENABLE_SSL:
             ssl_context = create_ssl_context()
-            server_socket = ssl_context.wrap_socket(server_socket, server_side=True)
             logging.info("SSL enabled. Using secure connection.")
 
         try:
@@ -72,19 +82,30 @@ def start_server() -> None:
                 logging.info(f"Connection accepted from {client_address}")
 
                 # Wrap client socket with SSL if enabled
-                if ENABLE_SSL:
+                if ENABLE_SSL and ssl_context:
                     try:
-                        client_socket = ssl_context.wrap_socket(client_socket, server_side=True)
+                        client_socket = ssl_context.wrap_socket(
+                            client_socket,
+                            server_side=True
+                        )
                     except ssl.SSLError as e:
-                        logging.warning(f"SSL error with client {client_address}: {e}")
+                        logging.warning(
+                            f"SSL error with client {client_address}: {e}"
+                        )
                         client_socket.close()
                         continue
 
                 client_thread = threading.Thread(
                     target=handle_client,
-                    args=(client_socket, client_address, file_path, reread_on_query, cached_lines)
+                    args=(
+                        client_socket,
+                        client_address,
+                        file_path,
+                        reread_on_query,
+                        cached_lines
+                    ),
+                    daemon=True,
                 )
-                client_thread.daemon = True
                 client_thread.start()
         except KeyboardInterrupt:
             logging.info("Server shutting down gracefully...")
@@ -98,6 +119,13 @@ def run_as_daemon() -> None:
     """
     Run the server in daemon mode, detached from the terminal.
     """
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s - %(levelname)s - %(message)s",
+        handlers=[
+            logging.FileHandler(LOG_FILE)
+        ]
+    )
     with daemon.DaemonContext():
         start_server()
 
@@ -106,6 +134,14 @@ def run_locally() -> None:
     """
     Run the server locally, allowing it to interact with the terminal.
     """
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s - %(levelname)s - %(message)s",
+        handlers=[
+            logging.FileHandler(LOG_FILE),
+            logging.StreamHandler(sys.stdout)
+        ]
+    )
     start_server()
 
 

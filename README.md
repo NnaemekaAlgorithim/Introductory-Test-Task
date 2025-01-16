@@ -1,42 +1,75 @@
-to run as a deamon:
-Create a file called my_python_server.service
-sudo nano /etc/systemd/system/my_python_server.service
+# Introductory Task
 
-Add the following content to the service file:
-[Unit]
-Description=My Python Server Daemon
-After=network.target
+This is a simple server that accepts string from the user and checks if the string exists in the configuration file and returns the response accordingly.
 
-[Service]
-ExecStart=/path/to/Introductory-Test-Task/env/bin/python /path/to/Introductory-Test-Task/py_server/server.py
-WorkingDirectory=/path/to/Introductory-Test-Task
-StandardOutput=journal
-StandardError=journal
-User=your-user-name
-Group=your-user-group
-Environment="PATH=/path/to/Introductory-Test-Task/test_env/bin:$PATH"
-Environment="VIRTUAL_ENV=/path/to/Introductory-Test-Task/test_env"
-Restart=always
+## Table of Content
+- [Setting Up the virtual Environment](#setting-up-the-virtual-environment)
+- [Setting up configuration file](#setting-up-configuration-file)
+- [Runing as daemon](#running-as-daemon)
+- [Running Normally](#running-normally)
+- [Using the client script](#using-the-client-script)
 
-[Install]
-WantedBy=multi-user.target
+---
 
-Make sure to replace /path/to/your/script.py with the actual path to your Python script, and set the User and Group to the appropriate Linux user/group that will run the service.
+## Setting Up the virtual Environment
 
-Reload the systemd manager to recognize the new service:
-sudo systemctl daemon-reload
+### Step 1: Create a Virtual Environment
 
-Start the service:
-sudo systemctl start my_python_server
+Navigate to the project directory and create a virtual environment:
+```bash
+python3 -m venv venv
+```
+Creating a virtual environment is different for different operating systems, you can follow this youtube video for instructions on any of Linux, Windows or Mac [Video](https://youtu.be/kz4gbWNO1cw)
 
-Enable the service to start on boot:
-sudo systemctl enable my_python_server
+Activate the virtual environment:
+* On Linux/macOS:
 
-To check the status of your service:
-sudo systemctl status my_python_server
+```bash
+source venv/bin/activate
+```
 
-If you need to stop the service:
-sudo systemctl stop my_python_server
+* On Windows:
 
-Systemd will log the output of your Python script to the journal, which you can view with:
-sudo journalctl -u my_python_server.service
+```bash
+venv\Scripts\activate
+```
+
+### Step 2: Install Dependencies
+Navigate to the project directory and run the bash command:
+
+```bash
+pip install -r requirements.txt
+```
+
+---
+## Setting up configuration file
+You have to create a file named .env at the root of the folder and then copy the contents of sample.env into it and then set the variables values acording to your setup for running the server.
+
+For HOST, PORT and BUFFER_SIZE, you set the values acording to the available port and host on your system, The LOG_FILE is the path to the file you want the logs to be saved for debugging,
+linuxpath is the path to the file where the server search for the existence of the string sent by the client.
+
+REREAD_ON_QUERY DEBUG, USE_SSL=False and ENABLE_SSL can be set as true or false, but USE_SSL is only used for client script to determine ssl or not in the client server communication.
+
+SSL_CERTIFICATE is set to the path of your generated ssl certificate incase of running in secure mode, SSL_KEY is the path to ssl key for secure mode, then also set the MAX_BUFFER_SIZE.
+
+
+## Running as daemon
+Navigate to the project directory and run the command
+
+```bash
+python3 py_server/server.py daemon
+```
+
+## Running Normally
+Navigate to the project directory and run the command
+
+```bash
+python3 py_server/server.py
+```
+
+## Using the client script
+Navigate to the project directory and run the command
+
+```bash
+python3 speed_test_client.py daemon
+```

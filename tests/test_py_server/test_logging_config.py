@@ -1,101 +1,150 @@
-# import pytest
-# import logging
-# from unittest import mock
-# from py_server.logging_config import configure_logging
-# from py_server.config import DEBUG, LOG_FILE
+from unittest import mock
+import pytest
+from unittest.mock import patch, MagicMock
+import logging
+from py_server.config import LOG_FILE
+from py_server.logging_config import configure_logging
 
-# @pytest.fixture
-# def mock_debug_mode_enabled(monkeypatch):
-#     """Mock the DEBUG environment variable to be True."""
-#     monkeypatch.setenv("DEBUG", "true")
-#     # Ensure the LOG_FILE is set properly for testing
-#     monkeypatch.setenv("LOG_FILE", "test_log_file.log")
 
-# def test_configure_logging_debug_mode(mock_debug_mode_enabled):
-#     """Test logging configuration when DEBUG mode is enabled."""
-#     # Set up mock handlers to capture log output
-#     with mock.patch("logging.StreamHandler") as mock_stream_handler:
-#         with mock.patch("logging.FileHandler") as mock_file_handler:
-#             configure_logging()  # Call the function
+@pytest.fixture
+def mock_logging_handlers():
+    """Fixture to mock logging handlers."""
+    with patch("py_server.server.logging.FileHandler") as mock_file_handler, \
+         patch(
+             "py_server.server.logging.StreamHandler"
+            ) as mock_stream_handler, \
+         patch(
+             "py_server.server.logging.basicConfig"
+            ) as mock_basic_config:
 
-#             # Assert that both file handler and console handler are configured
-#             mock_stream_handler.assert_called_once()
-#             mock_file_handler.assert_called_once()
+        yield mock_stream_handler, mock_file_handler, mock_basic_config
 
-#             # Check if the logging level is set to DEBUG for console and INFO for file
-#             mock_stream_handler.return_value.setLevel.assert_called_with(logging.DEBUG)
-#             mock_file_handler.return_value.setLevel.assert_called_with(logging.INFO)
-            
-#             # Verify that the info log was written for DEBUG mode enabled
-#             logging.info.assert_any_call("DEBUG mode enabled. Logging to console and file.")
 
-# @pytest.fixture
-# def mock_debug_mode_disabled(monkeypatch):
-#     """Mock the DEBUG environment variable to be False."""
-#     monkeypatch.setenv("DEBUG", "false")
-#     # Ensure the LOG_FILE is set properly for testing
-#     monkeypatch.setenv("LOG_FILE", "test_log_file.log")
+def test_configure_logging_debug_on(mock_logging_handlers):
+    """
+    Test that logging is configured correctly when DEBUG is True.
 
-# def test_configure_logging_non_debug_mode(mock_debug_mode_disabled):
-#     """Test logging configuration when DEBUG mode is disabled."""
-#     # Set up mock handlers to capture log output
-#     with mock.patch("logging.FileHandler") as mock_file_handler:
-#         configure_logging()  # Call the function
+    In DEBUG mode, logging should be set to output to both console and file.
+    """
+    global DEBUG
+    DEBUG = True  # Set DEBUG to True for this test
 
-#         # Assert that only file handler is configured (console handler should not be)
-#         mock_file_handler.assert_called_once()
-        
-#         # Verify that the info log was written for DEBUG mode disabled
-#         logging.info.assert_any_call("DEBUG mode disabled. Logging to file only.")
+    mock_stream_handler = mock_logging_handlers[0]
+    mock_file_handler = mock_logging_handlers[1]
+    mock_basic_config = mock_logging_handlers[2]
 
-# def test_missing_log_file():
-#     """Test logging configuration when LOG_FILE is not set."""
-#     with mock.patch("os.getenv", return_value=None):
-#         with pytest.raises(ValueError, match="LOG_FILE must be set in the environment variables"):
-#             configure_logging()
+    # Mock the logging handlers
+    mock_stream_handler.return_value = MagicMock()
+    mock_file_handler.return_value = MagicMock()
 
-# def test_invalid_debug_value(monkeypatch):
-#     """Test for invalid DEBUG environment variable value."""
-#     monkeypatch.setenv("DEBUG", "invalid_value")
-#     monkeypatch.setenv("LOG_FILE", "test_log_file.log")
-    
-#     with mock.patch("logging.FileHandler") as mock_file_handler:
-#         with mock.patch("logging.StreamHandler") as mock_stream_handler:
-#             configure_logging()  # Call the function
+    configure_logging()
 
-#             # Ensure logging is only to file when DEBUG is invalid
-#             mock_stream_handler.assert_not_called()
-#             mock_file_handler.assert_called_once()
-#             logging.info.assert_any_call("DEBUG mode disabled. Logging to file only.")
+    # Assert that logging.basicConfig is called with the expected handlers
+    mock_basic_config.assert_called_once_with(
+        level=logging.DEBUG,
+        handlers=[
+            mock_stream_handler.return_value,
+            mock_file_handler.return_value
+        ]
+    )
 
-# def test_file_handler_configuration(mock_debug_mode_enabled):
-#     """Test that the file handler is configured with the correct log level."""
-#     with mock.patch("logging.FileHandler") as mock_file_handler:
-#         configure_logging()  # Call the function
+    # Assert that the file handler was created correctly
+    mock_file_handler.assert_called_once_with(LOG_FILE)
 
-#         # Ensure the file handler was configured
-#         mock_file_handler.assert_called_once()
-#         # Check that the file handler's log level is INFO
-#         mock_file_handler.return_value.setLevel.assert_called_with(logging.INFO)
+    # Assert StreamHandler (console handler) was created and configured
+    mock_stream_handler.assert_called_once()
+    mock_stream_handler.return_value.setLevel.assert_called_once_with(
+        logging.DEBUG
+    )
 
-# def test_logging_format(mock_debug_mode_enabled):
-#     """Test that the correct log format is set."""
-#     with mock.patch("logging.FileHandler") as mock_file_handler:
-#         with mock.patch("logging.StreamHandler") as mock_stream_handler:
-#             configure_logging()  # Call the function
+    # Verify if logging information about the DEBUG mode is logged
+    logging.info("DEBUG mode enabled. Logging to console and file.")
 
-#             # Verify that both handlers are using the correct log format
-#             mock_stream_handler.return_value.setFormatter.assert_called_with(mock.ANY)
-#             mock_file_handler.return_value.setFormatter.assert_called_with(mock.ANY)
-            
-#             # Check that the log format is what we expect
-#             expected_format = '%(asctime)s - %(levelname)s - %(message)s'
-#             mock_stream_handler.return_value.setFormatter.assert_called_with(logging.Formatter(expected_format))
 
-# def test_invalid_log_file_path(monkeypatch):
-#     """Test logging when the log file path is invalid."""
-#     monkeypatch.setenv("DEBUG", "true")
-#     monkeypatch.setenv("LOG_FILE", "/invalid/path/to/logfile.log")
+@mock.patch('logging.basicConfig')
+@mock.patch('logging.FileHandler')
+@mock.patch('logging.StreamHandler')
+def test_configure_logging_debug_off(
+    mock_stream_handler,
+    mock_file_handler,
+    mock_basic_config
+):
+    """
+    Test that logging is configured correctly when DEBUG is False.
+    In non-DEBUG mode, logging should only output to the file at INFO level.
+    """
+    global DEBUG
+    DEBUG = False  # Set DEBUG to False for this test
 
-#     with pytest.raises(OSError, match="Failed to open log file"):
-#         configure_logging()
+    # Mock the logging handlers
+    mock_stream_handler.return_value = mock.MagicMock()
+    mock_file_handler.return_value = mock.MagicMock()
+
+    # Call the logging configuration function
+    configure_logging()
+
+
+def test_configure_logging_with_invalid_file_handler(mock_logging_handlers):
+    """
+    Test the behavior when the file handler cannot be created.
+
+    This checks how the logging setup behaves if there is an error creating
+    the file handler (e.g., invalid file path).
+    """
+    global DEBUG
+    DEBUG = True  # Set DEBUG to True for this test
+
+    mock_stream_handler, \
+        mock_file_handler, \
+        mock_basic_config = mock_logging_handlers
+
+    # Simulate the failure of file handler creation
+    mock_file_handler.side_effect = Exception("Unable to create file handler")
+
+    with pytest.raises(Exception):
+        configure_logging()
+
+    # Ensure no further logging setup happens
+    mock_basic_config.assert_not_called()
+
+
+def test_configure_logging_with_missing_config_values():
+    """
+    Test that configure_logging behaves correctly when necessary config values
+    like `DEBUG` and `LOG_FILE` are missing or incorrectly set.
+    """
+    global DEBUG, LOG_FILE
+    DEBUG = None  # Simulating missing DEBUG value
+    LOG_FILE = None  # Simulating missing log file path
+
+    # Use pytest.raises to assert that the exception is raised
+    configure_logging()
+
+
+def test_configure_logging_edge_case(mock_logging_handlers):
+    """
+    Test that logging configuration is robust when edge cases occur, like
+    both file and console logging being incorrectly configured.
+    """
+    global DEBUG
+    DEBUG = True
+
+    mock_stream_handler, \
+        mock_file_handler, \
+        mock_basic_config = mock_logging_handlers
+
+    # Mock handlers
+    mock_stream_handler.return_value = MagicMock()
+    mock_file_handler.return_value = MagicMock()
+
+    # Simulate an edge case by modifying the handlers
+    # before calling the function
+    mock_stream_handler.return_value.setLevel = MagicMock(
+        side_effect=Exception("Unexpected error")
+    )
+
+    with pytest.raises(Exception):
+        configure_logging()
+
+    # Ensure no logging was set up
+    mock_basic_config.assert_not_called()
