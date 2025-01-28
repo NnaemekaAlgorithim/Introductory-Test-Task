@@ -5,7 +5,6 @@ import threading
 import sys
 from typing import List, Tuple
 import daemon
-
 from py_server.config import (
     HOST,
     PORT,
@@ -15,9 +14,38 @@ from py_server.config import (
     SSL_KEY,
     ENABLE_SSL,
     LOG_FILE,
+    DEBUG,
+    validate_config,
 )
 from py_server.file_utils import load_file_into_cache
 from py_server.client_handler import handle_client
+
+
+"""
+Server Module
+
+This module defines the functionality to start and manage
+a server for handling client connections. It includes:
+
+- `get_file_path_and_reread_option`:Retrieves the file path and
+                                    reread option from the configuration.
+
+- `create_ssl_context`: Configures an SSL context for
+                        secure communication if SSL is enabled.
+
+- `start_server`: Initializes and starts the server,
+                  handling client connections and
+                  optionally wrapping them with SSL.
+
+- `run_as_daemon`: Runs the server in daemon mode,
+                   detached from the terminal.
+
+- `run_locally`: Runs the server in local mode,
+                 allowing terminal interaction.
+
+The module integrates with the configuration, logging, and
+utility components to ensure proper server setup and operation.
+"""
 
 
 def get_file_path_and_reread_option() -> Tuple[str, bool]:
@@ -85,8 +113,7 @@ def start_server() -> None:
                 if ENABLE_SSL and ssl_context:
                     try:
                         client_socket = ssl_context.wrap_socket(
-                            client_socket,
-                            server_side=True
+                            client_socket, server_side=True
                         )
                     except ssl.SSLError as e:
                         logging.warning(
@@ -102,7 +129,8 @@ def start_server() -> None:
                         client_address,
                         file_path,
                         reread_on_query,
-                        cached_lines
+                        cached_lines,
+                        DEBUG,  # Pass the DEBUG variable here
                     ),
                     daemon=True,
                 )
@@ -146,6 +174,14 @@ def run_locally() -> None:
 
 
 if __name__ == "__main__":
+    try:
+        validate_config()
+        print("Configuration validated successfully.")
+    except ValueError as error:
+        raise RuntimeError(
+            f"Invalid server configuration: {error}"
+        ) from error
+
     if len(sys.argv) > 1 and sys.argv[1] == "daemon":
         logging.info("Running as a daemon...")
         run_as_daemon()

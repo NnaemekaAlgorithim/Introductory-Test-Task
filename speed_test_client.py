@@ -19,6 +19,7 @@ CA_CERT_FILE: str = os.getenv("CA_CERT_FILE")
 
 # Toggle SSL on or off
 USE_SSL: bool = os.getenv("USE_SSL", "False").lower() == "true"
+print(USE_SSL)
 
 
 def measure_response_time_and_memory(
@@ -45,11 +46,13 @@ def measure_response_time_and_memory(
     raw_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
     if USE_SSL:
-        # Wrap the socket with SSL if enabled
-        context = ssl.create_default_context(cafile=CA_CERT_FILE)
+        # Create an SSL context and disable
+        # certificate verification (FOR DEVELOPMENT ONLY)
+        context = ssl.create_default_context()
+        context.check_hostname = False 
+        context.verify_mode = ssl.CERT_NONE
         client_socket = context.wrap_socket(
-            raw_socket,
-            server_hostname=host
+            raw_socket, server_hostname=host
         )
         print(f"SSL is enabled. Using SSL to connect to {host}:{port}")
     else:

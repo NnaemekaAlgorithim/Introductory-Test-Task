@@ -2,13 +2,15 @@ import logging
 import time
 import tracemalloc
 from typing import Optional, List
-from py_server.file_utils import linux_grep_search
+from py_server.file_utils import file_search
+
 
 """
 Module to manage client connection.
 
 This module provides functions to handle
-individual client connection.
+individual client connection,
+and log performance metrics to log file.
 """
 
 
@@ -19,10 +21,12 @@ def log_performance_metrics(
     elapsed_time: float,
     memory_usage: float,
     client_address: tuple[str, int],
+    search_query: str,
+    debug_mode: bool,
 ) -> None:
     """
     Log performance metrics including response time,
-    memory usage, and context.
+    memory usage, context, search query, and debug mode.
 
     Args:
         search_function_name (str): Name of the search function used.
@@ -31,13 +35,19 @@ def log_performance_metrics(
         elapsed_time (float): Time taken for the operation in seconds.
         memory_usage (float): Peak memory usage in MB.
         client_address (tuple[str, int]): The client's IP address and port.
+        search_query (str): The search query executed.
+        debug_mode (bool): Whether the application is running in DEBUG mode.
     """
     logging.info(
-        f"Performance Metrics: Function={search_function_name}, "
-        f"FilePath={file_path}, RereadOption={reread_option}, "
-        f"ElapsedTime={elapsed_time:.6f} seconds,"
-        f"MemoryUsage={memory_usage:.6f} MB,"
-        f"ClientAddress={client_address}"
+        "Performance Metrics:\n"
+        f"  Function: {search_function_name}\n"
+        f"  FilePath: {file_path}\n"
+        f"  RereadOption: {reread_option}\n"
+        f"  ElapsedTime: {elapsed_time:.6f} seconds\n"
+        f"  MemoryUsage: {memory_usage:.6f} MB\n"
+        f"  ClientAddress: {client_address}\n"
+        f"  SearchQuery: {search_query}\n"
+        f"  DebugMode: {debug_mode}"
     )
 
 
@@ -47,6 +57,7 @@ def handle_client(
     file_path: Optional[str],
     reread_on_query: bool,
     cached_lines: Optional[List[str]] = None,
+    debug_mode: bool = False,
 ) -> None:
     """
     Handle an individual client connection.
@@ -57,6 +68,7 @@ def handle_client(
         file_path (Optional[str]): Path to the file to search in.
         reread_on_query (bool): Whether to reread the file on every query.
         cached_lines (Optional[List[str]]): Cached lines of the file, if any.
+        debug_mode (bool): Whether the application is running in DEBUG mode.
 
     Returns:
         None
@@ -69,8 +81,7 @@ def handle_client(
             data = client_socket.recv(1024)
             if not data:
                 logging.info(
-                    f"No data received from {client_address}."
-                    f"Closing connection."
+                    f"No more data from {client_address}. Closing..."
                 )
                 break
 
@@ -79,8 +90,7 @@ def handle_client(
 
             if not message:
                 logging.info(
-                    f"Empty message received from {client_address}."
-                    f"Closing connection."
+                    f"No message received from {client_address}. Closing..."
                 )
                 break  # Gracefully handle empty message by ending the loop.
 
@@ -92,8 +102,8 @@ def handle_client(
                 tracemalloc.start()
                 start_time = time.time()
 
-                search_function = linux_grep_search
-                result = linux_grep_search(
+                search_function = file_search
+                result = file_search(
                     file_path, message, reread_on_query, cached_lines
                 )
                 logging.info(f"Search result: {result}")
@@ -114,6 +124,8 @@ def handle_client(
                     elapsed_time=elapsed_time,
                     memory_usage=memory_usage,
                     client_address=client_address,
+                    search_query=message,
+                    debug_mode=debug_mode,
                 )
 
                 # Construct the response

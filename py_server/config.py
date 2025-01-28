@@ -2,6 +2,14 @@ import os
 from dotenv import load_dotenv
 from typing import Optional
 
+
+"""
+Module to manage configuration settings.
+
+This module loads and validates configurations.
+"""
+
+
 # Load environment variables from the .env file
 load_dotenv()
 
@@ -12,8 +20,11 @@ BUFFER_SIZE: int = int(os.getenv("BUFFER_SIZE", "1024"))
 LOG_FILE: Optional[str] = os.getenv("LOG_FILE")
 DEBUG: bool = os.getenv("DEBUG", "false").strip().lower() == "true"
 FILE_PATH: Optional[str] = os.getenv("linuxpath")
-REREAD_ON_QUERY: bool = os.getenv("REREAD_ON_QUERY",
-                                  "false").strip().lower() == "true"
+REREAD_ON_QUERY: bool = (
+    os.getenv("REREAD_ON_QUERY", "false")
+    .strip()
+    .lower() == "true"
+)
 
 # SSL Configuration
 ENABLE_SSL: bool = os.getenv("ENABLE_SSL", "false").strip().lower() == "true"
@@ -60,12 +71,6 @@ def validate_config() -> None:
             "LOG_FILE is not set in the environment variables."
         )
 
-    # Validate FILE_PATH
-    if not FILE_PATH or not os.path.isfile(FILE_PATH):
-        raise ValueError(
-            f"FILE_PATH '{FILE_PATH}' does not exist or is not a valid file."
-        )
-
     # Validate SSL settings if SSL is enabled
     if ENABLE_SSL:
         if not SSL_CERTIFICATE or not os.path.isfile(SSL_CERTIFICATE):
@@ -77,13 +82,16 @@ def validate_config() -> None:
                 "SSL_KEY is required and must point to a valid file."
             )
 
+    # Validate the presence of linuxpath= in the .env file
+    with open(".env", "r") as env_file:
+        lines = env_file.readlines()
+        if not any(line.startswith("linuxpath=") for line in lines):
+            raise ValueError(
+                "The .env file must contain line starting with 'linuxpath='."
+            )
 
-# Validate the configuration at startup
-if __name__ == "__main__":
-    try:
-        validate_config()
-        print("Configuration validated successfully.")
-    except ValueError as error:
-        raise RuntimeError(
-            f"Invalid server configuration: {error}"
-        ) from error
+    # Validate FILE_PATH
+    if not FILE_PATH or not os.path.isfile(FILE_PATH):
+        raise ValueError(
+            f"FILE_PATH '{FILE_PATH}' does not exist or is not a valid file."
+        )
