@@ -9,28 +9,41 @@ Module to manage configuration settings.
 This module loads and validates configurations.
 """
 
-
 # Load environment variables from the .env file
-load_dotenv()
+try:
+    load_dotenv()
+except Exception as e:
+    raise RuntimeError(f"Error loading environment variables: {e}")
 
 # Constants for server configuration
-HOST: Optional[str] = os.getenv("HOST")
-PORT: int = int(os.getenv("PORT", "0"))
-BUFFER_SIZE: int = int(os.getenv("BUFFER_SIZE", "1024"))
-LOG_FILE: Optional[str] = os.getenv("LOG_FILE")
-DEBUG: bool = os.getenv("DEBUG", "false").strip().lower() == "true"
-FILE_PATH: Optional[str] = os.getenv("linuxpath")
-REREAD_ON_QUERY: bool = (
-    os.getenv("REREAD_ON_QUERY", "false")
-    .strip()
-    .lower() == "true"
-)
-
-# SSL Configuration
-ENABLE_SSL: bool = os.getenv("ENABLE_SSL", "false").strip().lower() == "true"
-SSL_CERTIFICATE: Optional[str] = os.getenv("SSL_CERTIFICATE")
-SSL_KEY: Optional[str] = os.getenv("SSL_KEY")
-MAX_BUFFER_SIZE: int = int(os.getenv("MAX_BUFFER_SIZE", "4096"))
+try:
+    HOST: Optional[str] = os.getenv("HOST")
+    PORT: int = int(os.getenv("PORT", "0"))
+    BUFFER_SIZE: int = int(os.getenv("BUFFER_SIZE", "1024"))
+    LOG_FILE: Optional[str] = os.getenv("LOG_FILE")
+    DEBUG: bool = os.getenv("DEBUG", "false").strip().lower() == "true"
+    FILE_PATH: Optional[str] = os.getenv("linuxpath")
+    SSL_CERTIFICATE: Optional[str] = os.getenv("SSL_CERTIFICATE")
+    SSL_KEY: Optional[str] = os.getenv("SSL_KEY")
+    MAX_BUFFER_SIZE: int = int(os.getenv("MAX_BUFFER_SIZE", "4096"))
+    REREAD_ON_QUERY: bool = (
+        os.getenv("REREAD_ON_QUERY", "false")
+        .strip()
+        .lower() == "true"
+    )
+    ENABLE_SSL: bool = (
+        os.getenv("ENABLE_SSL", "false")
+        .strip()
+        .lower() == "true"
+    )
+except ValueError as e:
+    raise ValueError(
+        f"Error parsing environment variables: {e}"
+    )
+except Exception as e:
+    raise RuntimeError(
+        f"Unexpected error during configuration loading: {e}"
+    )
 
 
 def validate_config() -> None:
@@ -44,54 +57,73 @@ def validate_config() -> None:
         ValueError: If any required configuration variable
                     is missing or invalid.
     """
-    # Check if DEBUG is set
-    if DEBUG is None:
-        raise ValueError("DEBUG configuration value is missing or None.")
-
-    # Validate HOST
-    if not HOST:
-        raise ValueError("HOST is not set in the environment variables.")
-
-    # Validate PORT
-    if not (1 <= PORT <= 65535):
-        raise ValueError(
-            "PORT must be a positive integer between 1 and 65535."
-        )
-
-    # Validate BUFFER_SIZE
-    if not (1 <= BUFFER_SIZE <= MAX_BUFFER_SIZE):
-        raise ValueError(
-            f"BUFFER_SIZE must be a positive integer not exceeding "
-            f"{MAX_BUFFER_SIZE} bytes."
-        )
-
-    # Validate LOG_FILE
-    if not LOG_FILE:
-        raise ValueError(
-            "LOG_FILE is not set in the environment variables."
-        )
-
-    # Validate SSL settings if SSL is enabled
-    if ENABLE_SSL:
-        if not SSL_CERTIFICATE or not os.path.isfile(SSL_CERTIFICATE):
+    try:
+        # Validate HOST
+        if not HOST:
             raise ValueError(
-                "SSL_CERTIFICATE is required and must point to a valid file."
-            )
-        if not SSL_KEY or not os.path.isfile(SSL_KEY):
-            raise ValueError(
-                "SSL_KEY is required and must point to a valid file."
+                "HOST is not set in the environment variables."
             )
 
-    # Validate the presence of linuxpath= in the .env file
-    with open(".env", "r") as env_file:
-        lines = env_file.readlines()
-        if not any(line.startswith("linuxpath=") for line in lines):
+        # Validate PORT
+        if not (1 <= PORT <= 65535):
             raise ValueError(
-                "The .env file must contain line starting with 'linuxpath='."
+                "PORT must be a positive integer between 1 and 65535."
             )
 
-    # Validate FILE_PATH
-    if not FILE_PATH or not os.path.isfile(FILE_PATH):
+        # Validate BUFFER_SIZE
+        if not (1 <= BUFFER_SIZE <= MAX_BUFFER_SIZE):
+            raise ValueError(
+                f"BUFFER_SIZE must be a positive integer not exceeding"
+                f"{MAX_BUFFER_SIZE} bytes."
+            )
+
+        # Validate LOG_FILE
+        if not LOG_FILE:
+            raise ValueError(
+                "LOG_FILE is not set in the environment variables."
+            )
+
+        # Validate SSL settings if SSL is enabled
+        if ENABLE_SSL:
+            if not SSL_CERTIFICATE or not os.path.isfile(SSL_CERTIFICATE):
+                raise ValueError(
+                    "SSL_CERTIFICATE required and must point to a valid file."
+                )
+            if not SSL_KEY or not os.path.isfile(SSL_KEY):
+                raise ValueError(
+                    "SSL_KEY is required and must point to a valid file."
+                )
+
+        # Validate the presence of linuxpath in the .env file
+        try:
+            with open(".env", "r") as env_file:
+                lines = env_file.readlines()
+                if not any(line.startswith("linuxpath=") for line in lines):
+                    raise ValueError(
+                        "The .env file must contain a line"
+                        "starting with 'linuxpath='."
+                    )
+        except FileNotFoundError:
+            raise FileNotFoundError(
+                ".env file not found."
+            )
+        except Exception as e:
+            raise RuntimeError(
+                f"Error reading .env file: {e}"
+            )
+
+        # Validate FILE_PATH
+        if not FILE_PATH or not os.path.isfile(FILE_PATH):
+            raise ValueError(
+                f"FILE_PATH '{FILE_PATH}'"
+                f"does not exist or is not a valid file."
+            )
+
+    except ValueError as e:
         raise ValueError(
-            f"FILE_PATH '{FILE_PATH}' does not exist or is not a valid file."
+            f"Configuration validation error: {e}"
+        )
+    except Exception as e:
+        raise RuntimeError(
+            f"Unexpected error during configuration validation: {e}"
         )

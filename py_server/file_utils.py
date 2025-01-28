@@ -32,6 +32,14 @@ def file_search(
         bool: True if the string is found, False otherwise.
         None: If an error occurs.
     """
+    # Validate inputs
+    if not file_path:
+        logging.error("The file_path is empty or None.")
+        return None
+    if not search_string:
+        logging.warning("The search_string is empty or None.")
+        return False
+
     try:
         if reread_on_query:
             # Use mmap for efficient file searching
@@ -46,11 +54,31 @@ def file_search(
         else:
             logging.warning("No cached lines provided for search.")
             return False
+
     except FileNotFoundError:
-        logging.error(f"File not found: {file_path}")
+        logging.error(
+            f"File not found: {file_path}. Ensure the file exists."
+        )
+        return None
+    except PermissionError:
+        logging.error(
+            f"Permission denied while accessing the file: {file_path}."
+        )
+        return None
+    except OSError as os_error:
+        logging.error(
+            f"OS error occurred with file {file_path}: {os_error}"
+        )
+        return None
+    except ValueError as value_error:
+        logging.error(
+            f"Value error while processing {file_path}: {value_error}"
+        )
         return None
     except Exception as error:
-        logging.error(f"Error in file_search: {error}")
+        logging.error(
+            f"Unexpected error in file_search: {error}"
+        )
         return None
 
 
@@ -67,12 +95,36 @@ def load_file_into_cache(file_path: str) -> set:
              Returns an empty set if the file is
              not found or an error occurs.
     """
+    # Validate input
+    if not file_path:
+        logging.error("The file_path is empty or None.")
+        return set()
+
     try:
         with open(file_path, "r") as file:
             return {line.strip() for line in file}
     except FileNotFoundError:
-        logging.error(f"File not found: {file_path}")
+        logging.error(
+            f"File not found: {file_path}. Ensure the file exists."
+        )
+        return set()
+    except PermissionError:
+        logging.error(
+            f"Permission denied while accessing the file: {file_path}."
+        )
+        return set()
+    except OSError as os_error:
+        logging.error(
+            f"OS error occurred with file {file_path}: {os_error}"
+        )
+        return set()
+    except ValueError as value_error:
+        logging.error(
+            f"Value error while processing {file_path}: {value_error}"
+        )
         return set()
     except Exception as error:
-        logging.error(f"Error reading file {file_path}: {error}")
+        logging.error(
+            f"Unexpected error reading file {file_path}: {error}"
+        )
         return set()
