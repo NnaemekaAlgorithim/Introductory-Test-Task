@@ -59,32 +59,40 @@ def validate_config() -> None:
     """
     try:
         # Validate HOST
+        HOST = os.getenv("HOST")
         if not HOST:
             raise ValueError(
                 "HOST is not set in the environment variables."
             )
 
         # Validate PORT
-        if not (1 <= PORT <= 65535):
+        PORT = os.getenv("PORT")
+        if not (1 <= int(PORT) <= 65535):
             raise ValueError(
                 "PORT must be a positive integer between 1 and 65535."
             )
 
         # Validate BUFFER_SIZE
-        if not (1 <= BUFFER_SIZE <= MAX_BUFFER_SIZE):
+        BUFFER_SIZE = os.getenv("BUFFER_SIZE")
+        MAX_BUFFER_SIZE = os.getenv("MAX_BUFFER_SIZE", 4096)
+        if not (1 <= int(BUFFER_SIZE) <= int(MAX_BUFFER_SIZE)):
             raise ValueError(
-                f"BUFFER_SIZE must be a positive integer not exceeding"
-                f"{MAX_BUFFER_SIZE} bytes."
+                    f"BUFFER_SIZE must be a positive integer not exceeding "
+                    f"{MAX_BUFFER_SIZE} bytes."
             )
 
         # Validate LOG_FILE
+        LOG_FILE = os.getenv("LOG_FILE")
         if not LOG_FILE:
             raise ValueError(
                 "LOG_FILE is not set in the environment variables."
             )
 
         # Validate SSL settings if SSL is enabled
+        ENABLE_SSL = os.getenv("ENABLE_SSL", "false").strip().lower() == "true"
         if ENABLE_SSL:
+            SSL_CERTIFICATE = os.getenv("SSL_CERTIFICATE")
+            SSL_KEY = os.getenv("SSL_KEY")
             if not SSL_CERTIFICATE or not os.path.isfile(SSL_CERTIFICATE):
                 raise ValueError(
                     "SSL_CERTIFICATE required and must point to a valid file."
@@ -95,13 +103,14 @@ def validate_config() -> None:
                 )
 
         # Validate the presence of linuxpath in the .env file
+        FILE_PATH = os.getenv("linuxpath")
         try:
             with open(".env", "r") as env_file:
                 lines = env_file.readlines()
                 if not any(line.startswith("linuxpath=") for line in lines):
                     raise ValueError(
-                        "The .env file must contain a line"
-                        "starting with 'linuxpath='."
+                        "The .env file must contain a line starting with "
+                        "'linuxpath='."
                     )
         except FileNotFoundError:
             raise FileNotFoundError(

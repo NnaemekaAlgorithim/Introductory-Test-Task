@@ -47,7 +47,7 @@ You need to create a file named .env at the root of the folder, then copy the co
 
 For HOST, PORT, and BUFFER_SIZE, set the values according to the available port and host on your system. LOG_FILE should be the path to the file where you want the logs to be saved for debugging. linuxpath is the path to the file where the server searches for the existence of the string sent by the client.
 
-REREAD_ON_QUERY, DEBUG, USE_SSL=False, and ENABLE_SSL can be set to true or false. However, USE_SSL is only used by the client script to determine whether SSL should be used for communication between the client and the server.
+REREAD_ON_QUERY, DEBUG, USE_SSL=False, and ENABLE_SSL can be set to true or false. However, USE_SSL is only used by the client script to determine if SSL should be used for communication between the client and the server.
 
 SSL_CERTIFICATE should be set to the path of your generated SSL certificate if running in secure mode. SSL_KEY should be the path to the SSL key for secure mode. Lastly, set MAX_BUFFER_SIZE.
 
@@ -159,5 +159,5 @@ python3 py_server/server.py
 Navigate to the project directory and run the command
 
 ```bash
-python3 speed_test_client.py daemon
+python3 speed_test_client.py
 ```

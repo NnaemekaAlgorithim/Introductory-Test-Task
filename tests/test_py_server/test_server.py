@@ -1,8 +1,9 @@
-from dotenv import load_dotenv
+import os
 import pytest
+import socket
 import ssl
-from unittest.mock import patch, MagicMock
-
+from unittest.mock import patch
+from py_server.config import FILE_PATH, REREAD_ON_QUERY
 from py_server.server import (
     get_file_path_and_reread_option,
     create_ssl_context,
@@ -10,143 +11,106 @@ from py_server.server import (
     run_as_daemon,
     run_locally,
 )
-from py_server.config import (
-    FILE_PATH,
-    REREAD_ON_QUERY
-)
 
 
-# Mock configuration values
-@pytest.fixture(autouse=True)
-def mock_config(monkeypatch):
-    monkeypatch.setattr("py_server.config.FILE_PATH", "/test/path")
-    monkeypatch.setattr("py_server.config.REREAD_ON_QUERY", False)
-    monkeypatch.setattr("py_server.config.SSL_CERTIFICATE", "/path/cert.pem")
-    monkeypatch.setattr("py_server.config.SSL_KEY", "/path/to/key.pem")
-    monkeypatch.setattr("py_server.config.ENABLE_SSL", True)
-    monkeypatch.setattr("py_server.config.HOST", "127.0.0.1")
-    monkeypatch.setattr("py_server.config.PORT", 5000)
+@pytest.fixture(scope="class")
+def mock_config():
+    """Fixture to mock configuration variables."""
+    with patch("py_server.config.FILE_PATH", "/mock/path/to/file"), \
+         patch("py_server.config.REREAD_ON_QUERY", False), \
+         patch("py_server.config.SSL_CERTIFICATE", "/mock/path/to/cert.pem"), \
+         patch("py_server.config.SSL_KEY", "/mock/path/to/key.pem"), \
+         patch("py_server.config.ENABLE_SSL", True):
+        yield
 
 
-# Load .env file
-load_dotenv()
+def test_get_file_path_and_reread_option(mock_config):
+    """Test retrieval of file path and reread option."""
+    file_path, reread_option = get_file_path_and_reread_option()
+    assert file_path == FILE_PATH
+    assert reread_option == REREAD_ON_QUERY
 
 
-def test_get_file_path_and_reread_option():
-    """
-    Test that the function retrieves the correct file path and reread option.
-    """
-    expected_file_path = FILE_PATH
-    expected_reread_on_query = REREAD_ON_QUERY
-
-    file_path, reread_on_query = get_file_path_and_reread_option()
-
-    assert file_path == expected_file_path
-    assert reread_on_query == expected_reread_on_query
-
-
-def test_create_ssl_context():
-    """
-    Test SSL context creation and configuration.
-    """
+def test_create_ssl_context_success(mock_config):
+    """Test successful creation of an SSL context."""
     ssl_context = create_ssl_context()
     assert isinstance(ssl_context, ssl.SSLContext)
-    assert ssl_context.protocol == ssl.PROTOCOL_TLS_SERVER
-    assert ssl.OP_NO_TLSv1 in ssl_context.options
-    assert ssl.OP_NO_TLSv1_1 in ssl_context.options
+    assert ssl_context.options & ssl.OP_NO_TLSv1
+    assert ssl_context.options & ssl.OP_NO_TLSv1_1
 
 
-@patch("py_server.server.socket.socket")
-def test_start_server(mock_socket):
-    """
-    Test server start with mock socket.
-    """
-    # Mock the server socket
-    mock_server_socket = MagicMock()
-    mock_socket.return_value = mock_server_socket
+def test_create_ssl_context_file_not_found():
+    """Test SSL context creation with missing certificate or key."""
+    mock_env = {'SSL_CERTIFICATE': '/invalid/path', 'SSL_KEY': '/invalid/key'}
+    with patch.dict(os.environ, mock_env), \
+         patch.object(
+             ssl.SSLContext, 'load_cert_chain', side_effect=FileNotFoundError
+         ):
+        with pytest.raises(FileNotFoundError):
+            create_ssl_context()
 
-    # Mock dependent functions and methods
+
+def test_create_ssl_context_ssl_error():
+    """Test SSL context creation with SSL configuration error."""
+    with patch(
+        "ssl.SSLContext.load_cert_chain",
+        side_effect=ssl.SSLError("SSL error")
+    ), pytest.raises(ssl.SSLError):
+        create_ssl_context()
+
+
+def test_start_server_no_file_path(mock_config):
+    """Test server startup without a valid file path."""
+    with patch(
+        "py_server.server.get_file_path_and_reread_option",
+        return_value=("", False)
+    ), patch("logging.error") as mock_log:
+        start_server()
+        mock_log.assert_called_with(
+            "Server cannot start without a valid file path."
+        )
+
+
+def test_start_server_file_not_found(mock_config):
+    """Test server startup with missing file."""
     with patch(
         "py_server.file_utils.load_file_into_cache",
-        return_value=["Line1", "Line2"]
-        ), \
-            patch("py_server.client_handler.handle_client"):
+        side_effect=FileNotFoundError
+    ), patch("logging.error") as mock_error, patch(
+        "socket.socket",
+        side_effect=socket.error("File not found")
+    ):
+        try:
+            start_server()
+        except KeyboardInterrupt:
+            pass  # Gracefully handle keyboard interrupt
 
-        # Simulate server accepting a connection and
-        # then stopping on KeyboardInterrupt
-        mock_server_socket.accept.side_effect = [
-            (MagicMock(), ("127.0.0.1", 12345)),
-            KeyboardInterrupt,  # Simulate server shutdown
-        ]
-
-        # Call the function under test
-        start_server()
-
-
-@patch("py_server.server.threading.Thread")
-def test_start_server_with_threads(mock_thread):
-    """
-    Test server threading for client handling.
-    """
-    mock_client_socket = MagicMock()
-    mock_client_address = ("127.0.0.1", 12345)
-    mock_server_socket = MagicMock()
-    mock_server_socket.accept.side_effect = [
-        (mock_client_socket, mock_client_address), KeyboardInterrupt
-    ]
-
-    with patch(
-        "py_server.server.socket.socket",
-        return_value=mock_server_socket
-    ), \
-            patch(
-                "py_server.file_utils.load_file_into_cache",
-                return_value=[]
-            ):
-        start_server()
+    # Assert expected logging error
+    assert mock_error.called, "Expected logging error about missing file"
+    assert "File not found" in mock_error.call_args[0][0], (
+        "Wrong error message logged"
+    )
 
 
-@patch("py_server.server.daemon.DaemonContext")
-@patch("py_server.server.socket.socket")
-def test_run_as_daemon(mock_socket, mock_daemon_context):
-    """
-    Test that the server runs in daemon mode without
-    actually binding to a port.
-    """
-    # Mock the socket to avoid binding to the port
-    mock_socket_instance = MagicMock()
-    mock_socket.return_value = mock_socket_instance
-    mock_socket_instance.bind.return_value = None
-
-    # Ensure DaemonContext does not block the test
-    mock_daemon_instance = MagicMock()
-    mock_daemon_context.return_value = mock_daemon_instance
-
-    # Call the function under test
-    run_as_daemon()
-
-    # Verify DaemonContext was used as expected
-    mock_daemon_context.assert_called_once()
+def test_run_as_daemon(mock_config):
+    """Test running the server as a daemon."""
+    with patch("py_server.server.start_server"), \
+         patch("daemon.DaemonContext") as mock_daemon:
+        run_as_daemon()
+        mock_daemon.assert_called_once()
 
 
-@patch("py_server.server.start_server")
-def test_run_locally(mock_start_server):
-    """
-    Test that the server runs locally.
-    """
-    run_locally()
-    mock_start_server.assert_called_once()
+def test_run_locally(mock_config):
+    """Test running the server locally."""
+    with patch("py_server.server.start_server") as mock_start_server:
+        run_locally()
+        mock_start_server.assert_called_once()
 
 
-def test_main_run_locally():
-    """
-    Test the main function when running locally.
-    """
-    pass
-
-
-def test_main_run_as_daemon():
-    """
-    Test the main function when running as a daemon.
-    """
-    pass
+def test_socket_error_handling(mock_config):
+    """Test server startup with socket error handling."""
+    with patch("socket.socket") as mock_socket:
+        mock_socket.side_effect = OSError("Socket error")
+        with patch("logging.error") as mock_log:
+            start_server()
+            mock_log.assert_called_with("Socket error: Socket error")

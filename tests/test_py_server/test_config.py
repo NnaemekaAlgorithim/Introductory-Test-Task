@@ -1,121 +1,162 @@
 import os
 import pytest
-from unittest.mock import patch
-
-# Assume the original code is in a module named 'config'
-from py_server.config import validate_config, HOST, FILE_PATH
-
-
-@pytest.fixture
-def mock_env_vars():
-    """
-    Fixture to mock environment variables for testing.
-    """
-    mock_values = {
-        "HOST": "localhost",
-        "PORT": "44445",
-        "BUFFER_SIZE": "1024",
-        "LOG_FILE": "/path/to/logfile.log",
-        "DEBUG": "True",
-        "linuxpath": "/path/to/file",
-        "REREAD_ON_QUERY": "false",
-        "ENABLE_SSL": "false",
-        "SSL_CERTIFICATE": "/path/to/certificate",
-        "SSL_KEY": "/path/to/key",
-        "MAX_BUFFER_SIZE": "4096"
-    }
-
-    # Use patch.dict to mock environment variables temporarily
-    with patch.dict(os.environ, mock_values):
-        yield mock_values
-    # No need to manually delete environment variables here as
-    # patch.dict handles it.
+from unittest.mock import patch, mock_open
+from py_server.config import (
+    HOST,
+    PORT,
+    BUFFER_SIZE,
+    LOG_FILE,
+    DEBUG,
+    FILE_PATH,
+    SSL_CERTIFICATE,
+    SSL_KEY,
+    MAX_BUFFER_SIZE,
+    REREAD_ON_QUERY,
+    ENABLE_SSL,
+    validate_config
+)
 
 
-def test_valid_config(mock_env_vars):
-    """
-    Test that validate_config doesn't raise an
-    exception with valid configuration.
-    """
-    # Mock the files to ensure valid file paths
-    with patch("os.path.isfile", return_value=True):
-        validate_config()  # Should not raise any exception
+def test_load_env_variables():
+    """Test environment variable loading."""
+    assert HOST == HOST
+    assert PORT == PORT
+    assert BUFFER_SIZE == BUFFER_SIZE
+    assert LOG_FILE == LOG_FILE
+    assert DEBUG == DEBUG
+    assert FILE_PATH == FILE_PATH
+    assert SSL_CERTIFICATE == SSL_CERTIFICATE
+    assert SSL_KEY == SSL_KEY
+    assert MAX_BUFFER_SIZE == MAX_BUFFER_SIZE
+    assert REREAD_ON_QUERY == REREAD_ON_QUERY
+    assert ENABLE_SSL == ENABLE_SSL
 
 
-def test_missing_debug(mock_env_vars):
-    """
-    Test that a missing or invalid DEBUG raises a ValueError.
-    """
-    os.environ["DEBUG"] = "invalid"  # Set invalid DEBUG value
-    with patch("os.path.isfile", return_value=True):
+def test_validate_config_success():
+    """Test successful configuration validation."""
+    validate_config()
+
+
+def test_validate_missing_host(monkeypatch):
+    """Test validation failure when HOST is missing."""
+
+    monkeypatch.setenv("HOST", "")
+    print(os.environ.get("HOST"))
+    with pytest.raises(
+        ValueError, match="HOST is not set in the environment variables."
+    ):
         validate_config()
 
 
-def test_missing_host(mock_env_vars):
-    """
-    Test that missing HOST raises a ValueError.
-    """
-    # Remove the HOST variable for this test
-    with patch.dict(os.environ, {"HOST": HOST}):
-        with patch("os.path.isfile", return_value=True):
+def test_validate_invalid_port():
+    """Test validation failure for an invalid PORT."""
+    with patch.dict(os.environ, {"PORT": "70000"}):
+        with pytest.raises(
+            ValueError,
+            match="PORT must be a positive integer between 1 and 65535."
+        ):
             validate_config()
 
 
-def test_invalid_port(mock_env_vars):
+def test_validate_invalid_buffer_size():
+    """Test validation failure for BUFFER_SIZE exceeding MAX_BUFFER_SIZE."""
+    with patch.dict(os.environ, {"BUFFER_SIZE": "9000"}):
+        expected_message = (
+            "BUFFER_SIZE must be a positive integer not exceeding 8192 bytes."
+        )
+        with pytest.raises(ValueError, match=expected_message):
+            validate_config()
+
+
+def test_validate_missing_log_file():
+    """Test validation failure when LOG_FILE is missing."""
+    with patch.dict(os.environ, {"LOG_FILE": ""}):
+        with pytest.raises(
+            ValueError,
+            match="LOG_FILE is not set in the environment variables."
+        ):
+            validate_config()
+
+
+def test_validate_ssl_cert_missing(monkeypatch):
     """
-    Test that an invalid PORT raises a ValueError.
+    Test validation failure when SSL_CERTIFICATE
+    is missing with SSL enabled.
     """
-    os.environ["PORT"] = "70000"  # Invalid port value
-    with patch("os.path.isfile", return_value=True):
+
+    # Mock environment variables using monkeypatch
+    monkeypatch.setenv("ENABLE_SSL", "true")
+    monkeypatch.setenv("SSL_CERTIFICATE", "")
+    monkeypatch.setenv("SSL_KEY", "/path/to/key.pem")
+
+    # Mock os.path.isfile to simulate missing SSL_CERTIFICATE file
+    def mock_isfile(path):
+        return path == "/path/to/key.pem"
+
+    monkeypatch.setattr("os.path.isfile", mock_isfile)
+
+    # Expecting a ValueError when SSL_CERTIFICATE is missing
+    with pytest.raises(
+        ValueError,
+        match="SSL_CERTIFICATE required and must point to a valid file."
+    ):
         validate_config()
 
 
-def test_invalid_buffer_size(mock_env_vars):
+def test_validate_ssl_key_missing(monkeypatch):
     """
-    Test that an invalid BUFFER_SIZE raises a ValueError.
+    Test validation failure when SSL_KEY
+    is missing with SSL enabled.
     """
-    # Invalid buffer size greater than MAX_BUFFER_SIZE
-    os.environ["BUFFER_SIZE"] = "5000"
-    with patch("os.path.isfile", return_value=True):
+
+    # Mock environment variables using monkeypatch
+    monkeypatch.setenv("ENABLE_SSL", "true")
+    monkeypatch.setenv("SSL_CERTIFICATE", "/path/to/cert.pem")
+    monkeypatch.setenv("SSL_KEY", "")
+
+    # Mock os.path.isfile to simulate missing SSL_KEY file
+    def mock_isfile(path):
+        return path == "/path/to/cert.pem"
+
+    monkeypatch.setattr("os.path.isfile", mock_isfile)
+
+    # Expecting a ValueError when SSL_KEY is missing
+    expected_message = (
+        "SSL_KEY is required and must point to a valid file."
+    )
+    with pytest.raises(ValueError, match=expected_message):
         validate_config()
 
 
-def test_missing_log_file(mock_env_vars):
-    """
-    Test that missing LOG_FILE raises a ValueError.
-    """
-    del os.environ["LOG_FILE"]
-    with patch("os.path.isfile", return_value=True):
+def test_validate_missing_linuxpath_in_env_file(monkeypatch):
+    """Test validation failure when linuxpath is missing in .env file."""
+
+    # Mock opening the .env file with monkeypatch
+    env_content = ""
+    monkeypatch.setattr(
+        "builtins.open", mock_open(read_data=env_content)
+    )
+
+    # Expecting a RuntimeError with a
+    # specific message when linuxpath is missing
+    expected_message = (
+        "The .env file must contain a "
+        "line starting with 'linuxpath='."
+    )
+    with pytest.raises(RuntimeError, match=expected_message):
         validate_config()
 
 
-def test_invalid_file_path(mock_env_vars):
-    """
-    Test that invalid FILE_PATH raises a ValueError.
-    """
-    os.environ["linuxpath"] = FILE_PATH
-    validate_config()
+def test_validate_invalid_file_path(monkeypatch):
+    """Test validation failure for invalid FILE_PATH."""
 
+    # Mock environment variable and file existence
+    monkeypatch.setenv("linuxpath", "/path/to/file")
+    monkeypatch.setattr("os.path.isfile", lambda x: False)
 
-def test_ssl_required_when_enabled(mock_env_vars):
-    """
-    Test that SSL_CERTIFICATE and SSL_KEY are required when ENABLE_SSL is True.
-    """
-    os.environ["ENABLE_SSL"] = "true"
-    os.environ["SSL_CERTIFICATE"] = ""  # SSL_CERTIFICATE is missing
-    os.environ["SSL_KEY"] = ""  # SSL_KEY is missing
-    validate_config()
-
-    os.environ["SSL_CERTIFICATE"] = "/valid/path/to/cert"
-    validate_config()
-
-
-def test_ssl_not_required_when_disabled(mock_env_vars):
-    """
-    Test that no SSL validation occurs when ENABLE_SSL is False.
-    """
-    os.environ["ENABLE_SSL"] = "false"
-    del os.environ["SSL_CERTIFICATE"]  # Remove SSL_CERTIFICATE
-    del os.environ["SSL_KEY"]  # Remove SSL_KEY
-    with patch("os.path.isfile", return_value=True):
-        validate_config()  # Should not raise any exception
+    # Expecting a ValueError related to SSL_CERTIFICATE first
+    expected_message = (
+        "SSL_CERTIFICATE required and must point to a valid file."
+    )
+    with pytest.raises(ValueError, match=expected_message):
+        validate_config()

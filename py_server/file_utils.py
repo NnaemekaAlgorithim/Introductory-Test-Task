@@ -43,11 +43,26 @@ def file_search(
     try:
         if reread_on_query:
             # Use mmap for efficient file searching
-            search_bytes = search_string.encode("utf-8")
             with open(file_path, "rb") as f:
                 with mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ) as mm:
-                    # Use mmap.find() for fast searching
-                    return mm.find(search_bytes) != -1
+                    # Search for the exact match of the search string
+                    search_bytes = search_string.encode("utf-8")
+                    offset = 0
+                    while True:
+                        found = mm.find(search_bytes, offset)
+                        if found == -1:
+                            break
+                        # Check if the found match is a complete word
+                        if (found == 0 or mm[found - 1] in b" \t\r\n"):
+                            if (
+                                    found + len(search_bytes) == len(mm) or
+                                    mm[found + len(search_bytes)] in b" \t\r\n"
+                            ):
+                                return True
+                            offset = found + 1
+
+            return False  # No exact match found
+
         elif cached_lines is not None:
             # Use set for O(1) average lookup time
             return search_string in cached_lines

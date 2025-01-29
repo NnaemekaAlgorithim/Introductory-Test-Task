@@ -1,107 +1,136 @@
+import os
+import tempfile
 import pytest
-from unittest.mock import patch
-from py_server.file_utils import linux_grep_search, load_file_into_cache
+from unittest.mock import patch, mock_open
+from py_server.file_utils import file_search, load_file_into_cache
 
 
-# Function to test linux_grep_search
-@pytest.mark.parametrize(
-    "file_path, search_string, reread_on_query, cached_lines, expected_result",
-    [
-        ("test.txt", "search_term", True, None, True),
-        ("test.txt", "search_term", False, ["line1", "search_term"], True),
-        ("test.txt", "search_term", False, None, False),
-        ("nonexistent.txt", "search_term", True, None, False),
-        ("test.txt", "search_term", True, None, True),
-    ]
-)
-@patch("subprocess.run")
-def test_linux_grep_search(
-    mock_run,
-    file_path,
-    search_string,
-    reread_on_query,
-    cached_lines,
-    expected_result
-):
-    """
-    Test the `linux_grep_search` function for various scenarios.
-    """
-    # Mock subprocess.run to simulate command behavior
-    if reread_on_query and file_path != "nonexistent.txt":
-        mock_run.return_value.returncode = 0  # Simulating grep success
-    else:
-        mock_run.return_value.returncode = 1  # Simulating grep failure
-
-    result = linux_grep_search(
-        file_path,
-        search_string,
-        reread_on_query,
-        cached_lines
-    )
-
-    assert result == expected_result
+@pytest.fixture
+def temp_file():
+    """Fixture to create a temporary file for testing."""
+    with tempfile.NamedTemporaryFile(delete=False, mode="w+t") as temp:
+        temp.write("line1\nline2\nsearch_this_line\n")
+        temp.flush()
+        yield temp.name
+    os.unlink(temp.name)
 
 
-@pytest.mark.parametrize(
-    "file_path, expected_result",
-    [
-        ("test.txt", []),  # File with valid content
-        ("nonexistent.txt", []),  # File does not exist
-        ("empty.txt", []),  # Empty file
-    ]
-)
-@patch("builtins.open")
-def test_load_file_into_cache(mock_open, file_path, expected_result):
-    """
-    Test the `load_file_into_cache` function for various scenarios.
-    """
-    # Mocking open function behavior
-    if file_path == "test.txt":
-        # Mock the file contents for a valid file
-        mock_file = mock_open.return_value
-        mock_enter = mock_file.__enter__.return_value
-        mock_enter.readlines.return_value = ["line1\n", "line2\n"]
-    elif file_path == "empty.txt":
-        # Mock an empty file
-        mock_file = mock_open.return_value
-        mock_enter = mock_file.__enter__.return_value
-        mock_enter.readlines.return_value = []
-    else:
-        # Simulate file not found error
-        mock_open.side_effect = FileNotFoundError
-
-    result = load_file_into_cache(file_path)
-
-    # Assert that the result matches the expected result
-    assert result == expected_result
+def test_file_search_with_mmap(temp_file):
+    """Test file_search with mmap and a valid search string."""
+    assert file_search(
+        temp_file, "search_this_line", reread_on_query=True
+    ) is True
+    assert file_search(
+        temp_file, "non_existent_line", reread_on_query=True
+    ) is False
 
 
-# Edge case: handle invalid arguments and logging errors
+def test_file_search_with_cached_lines():
+    """Test file_search using cached lines."""
+    cached_lines = {"line1", "line2", "search_this_line"}
+    assert file_search(
+        "dummy_path",
+        "search_this_line",
+        reread_on_query=False,
+        cached_lines=cached_lines
+    ) is True
+    assert file_search(
+        "dummy_path",
+        "non_existent_line",
+        reread_on_query=False,
+        cached_lines=cached_lines
+    ) is False
 
-@pytest.mark.parametrize(
-    "file_path, search_string, reread_on_query, cached_lines, expected_result",
-    [
-        (None, "search_term", True, None, None),
-        ("test.txt", None, True, None, None),
-        ("test.txt", "search_term", None, False, None),
-    ]
-)
-def test_linux_grep_search_edge_cases(
-    file_path,
-    search_string,
-    reread_on_query,
-    cached_lines,
-    expected_result
-):
-    """
-    Test edge cases for `linux_grep_search`
-    when provided with invalid arguments.
-    """
-    result = linux_grep_search(
-        file_path,
-        search_string,
-        reread_on_query,
-        cached_lines
-    )
 
-    assert result == expected_result
+def test_file_search_with_no_cached_lines():
+    """Test file_search when no cached lines are provided."""
+    assert file_search(
+        "dummy_path",
+        "search_this_line",
+        reread_on_query=False
+    ) is False
+
+
+def test_file_search_file_not_found():
+    """Test file_search when the file does not exist."""
+    with patch(
+            "builtins.open",
+            side_effect=FileNotFoundError):
+        assert file_search(
+            "non_existent_file",
+            "search_string",
+            reread_on_query=True
+        ) is None
+
+
+def test_file_search_permission_error():
+    """Test file_search when file access is denied."""
+    with patch(
+            "builtins.open",
+            side_effect=PermissionError):
+        assert file_search(
+            "restricted_file",
+            "search_string",
+            reread_on_query=True
+        ) is None
+
+
+def test_file_search_os_error():
+    """Test file_search when an OS error occurs."""
+    with patch(
+            "builtins.open",
+            side_effect=OSError("OS error")):
+        assert file_search(
+            "error_file",
+            "search_string",
+            reread_on_query=True
+        ) is None
+
+
+def test_file_search_value_error():
+    """Test file_search when a ValueError occurs."""
+    with patch(
+            "mmap.mmap",
+            side_effect=ValueError("Value error")):
+        with open(
+            tempfile.NamedTemporaryFile(delete=False).name, "wb"
+        ) as dummy_file:
+            dummy_file.write(b"dummy_content")
+        assert file_search(
+            dummy_file.name,
+            "search_string",
+            reread_on_query=True
+        ) is None
+
+
+def test_load_file_into_cache(temp_file):
+    """Test load_file_into_cache for successful loading."""
+    cached_lines = load_file_into_cache(temp_file)
+    assert cached_lines == {"line1", "line2", "search_this_line"}
+
+
+def test_load_file_into_cache_file_not_found():
+    """Test load_file_into_cache when the file does not exist."""
+    with patch("builtins.open", side_effect=FileNotFoundError):
+        assert load_file_into_cache("non_existent_file") == set()
+
+
+def test_load_file_into_cache_permission_error():
+    """Test load_file_into_cache when file access is denied."""
+    with patch("builtins.open", side_effect=PermissionError):
+        assert load_file_into_cache("restricted_file") == set()
+
+
+def test_load_file_into_cache_os_error():
+    """Test load_file_into_cache when an OS error occurs."""
+    with patch("builtins.open", side_effect=OSError("OS error")):
+        assert load_file_into_cache("error_file") == set()
+
+
+def test_load_file_into_cache_value_error():
+    """Test load_file_into_cache when a ValueError occurs."""
+    with patch(
+        "builtins.open", mock_open(read_data="line1\nline2\nsearch_this_line")
+            ), \
+         patch("builtins.open", side_effect=ValueError("Value error")):
+        assert load_file_into_cache("dummy_path") == set()
